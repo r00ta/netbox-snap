@@ -1,0 +1,103 @@
+name: community-netbox
+version: '4.5.5'
+title: NetBox
+summary: The premier source of truth powering network automation
+description: |
+  NetBox is the leading solution for modeling and documenting modern networks.
+  It combines traditional DCIM (Data Center Infrastructure Management) and
+  IPAM (IP Address Management) with powerful automation capabilities.
+
+  This snap packages the NetBox application with Gunicorn. PostgreSQL and
+  Redis must be provided separately (system packages, Docker, etc.).
+
+  Quick start:
+
+    sudo apt install postgresql redis-server
+
+    sudo -u postgres createuser --superuser netbox
+    sudo -u postgres createdb -O netbox netbox
+
+    sudo snap set netbox db.host=localhost db.port=5432 \
+      db.name=netbox db.user=netbox db.password=""
+    sudo snap set netbox redis.host=localhost redis.port=6379
+
+    sudo netbox.manage createsuperuser
+
+    # Open http://localhost:8080
+
+  All settings are available via `snap get netbox`.
+license: Apache-2.0
+website: https://netboxlabs.com/products/netbox/
+source-code: https://github.com/netbox-community/netbox
+issues: https://github.com/netbox-community/netbox/issues
+contact: https://github.com/netbox-community/netbox/discussions
+
+base: core24
+grade: stable
+confinement: strict
+
+apps:
+  netbox-web:
+    command: bin/netbox-web
+    daemon: simple
+    plugs: [network, network-bind]
+    stop-timeout: 30s
+
+  netbox-rqworker:
+    command: bin/netbox-rqworker
+    daemon: simple
+    plugs: [network, network-bind]
+    stop-timeout: 30s
+
+  manage:
+    command: bin/netbox-manage
+    plugs: [network, network-bind]
+
+hooks:
+  install:
+    plugs: [network, network-bind]
+  configure:
+    plugs: [network, network-bind]
+
+parts:
+  netbox:
+    plugin: nil
+    source: https://github.com/netbox-community/netbox.git
+    source-tag: v4.5.5
+    build-packages:
+      - python3-dev
+      - python3-venv
+      - python3-pip
+      - build-essential
+      - libxml2-dev
+      - libxslt1-dev
+      - libffi-dev
+      - libpq-dev
+      - libssl-dev
+      - zlib1g-dev
+      - git
+    stage-packages:
+      - python3
+      - python3-venv
+      - libpq5
+      - libxml2
+      - libffi8
+      - libssl3t64
+    override-build: |
+      set -eu
+      INSTALL_DIR="$SNAPCRAFT_PART_INSTALL/opt/netbox"
+      mkdir -p "$INSTALL_DIR"
+
+      python3 -m venv "$INSTALL_DIR/venv"
+
+      "$INSTALL_DIR/venv/bin/pip" install --upgrade pip wheel setuptools
+
+      "$INSTALL_DIR/venv/bin/pip" install -r requirements.txt whitenoise
+
+      cp -r netbox "$INSTALL_DIR/netbox"
+      cp requirements.txt "$INSTALL_DIR/"
+      cp base_requirements.txt "$INSTALL_DIR/"
+
+  helpers:
+    plugin: dump
+    source: snap/local/

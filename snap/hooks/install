@@ -1,0 +1,61 @@
+#!/bin/bash
+# Post-install hook for the NetBox snap.
+# Sets default snap configuration values, creates directories, and writes
+# the snap_settings.py Django wrapper.
+
+set -eu
+
+export SNAP_COMMON="${SNAP_COMMON:-/var/snap/netbox/common}"
+export SNAP_DATA="${SNAP_DATA:-/var/snap/netbox/current}"
+
+CONFIG_DIR="$SNAP_COMMON/config"
+
+# Create writable directories
+mkdir -p \
+    "$SNAP_COMMON/media" \
+    "$SNAP_COMMON/reports" \
+    "$SNAP_COMMON/scripts" \
+    "$SNAP_COMMON/static" \
+    "$CONFIG_DIR"
+
+# Set default snap configuration (users override with `snap set netbox ...`)
+snapctl set db.host=localhost   db.port=5432 \
+            db.name=netbox      db.user=netbox      db.password="" \
+            redis.host=localhost redis.port=6379      redis.password="" \
+            http.port=8080
+
+# Create the Django settings wrapper.  NetBox hardcodes STATIC_ROOT in
+# netbox/settings.py so it cannot be overridden via configuration.py.
+# This wrapper also enables WhiteNoise so Gunicorn can serve static files
+# without a separate web server (Nginx/Apache).
+cat > "$CONFIG_DIR/snap_settings.py" <<'PYEOF'
+"""Snap-specific Django settings wrapper for NetBox."""
+import os
+
+# Import all settings from the upstream NetBox settings module.
+from netbox.settings import *  # noqa: F401, F403
+
+# Override STATIC_ROOT to point to the writable $SNAP_COMMON area.
+STATIC_ROOT = os.environ.get('NETBOX_STATIC_ROOT', STATIC_ROOT)  # noqa: F405
+
+# --- WhiteNoise: serve static files directly from Gunicorn ----------------
+# Insert WhiteNoise right after SecurityMiddleware (index 0 is typically
+# SecurityMiddleware in Django's default ordering).
+_wn = 'whitenoise.middleware.WhiteNoiseMiddleware'
+if _wn not in MIDDLEWARE:  # noqa: F405
+    for _i, _mw in enumerate(MIDDLEWARE):  # noqa: F405
+        if 'SecurityMiddleware' in _mw:
+            MIDDLEWARE.insert(_i + 1, _wn)  # noqa: F405
+            break
+    else:
+        MIDDLEWARE.insert(0, _wn)  # noqa: F405
+
+STORAGES = {  # noqa: F405
+    **STORAGES,  # noqa: F405
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
+PYEOF
+
+echo "NetBox snap directories and settings wrapper initialized."

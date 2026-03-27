@@ -1,0 +1,23 @@
+#!/bin/bash
+# Start the NetBox web server (Gunicorn) for the snap.
+
+# shellcheck source=common.sh
+. "$(dirname "$0")/common.sh"
+ensure_directories
+
+# Wait for backing services
+wait_for_postgres 60
+wait_for_redis 30
+
+# Initialize the database and NetBox on first run
+"$(dirname "$0")/netbox-init"
+
+echo "Starting NetBox web server on port ${NETBOX_HTTP_PORT}..."
+
+# Use 'python3 -m gunicorn' instead of the gunicorn script directly
+# to avoid shebang issues with the venv path baked in at build time.
+exec "$NETBOX_VENV/bin/python3" -m gunicorn \
+    --pythonpath "$NETBOX_APP" \
+    --config "$SNAP/conf/gunicorn.conf.py" \
+    --bind "0.0.0.0:${NETBOX_HTTP_PORT}" \
+    netbox.wsgi

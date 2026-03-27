@@ -1,0 +1,8 @@
+#!/bin/bash
+# Wrapper for NetBox's manage.py (Django management commands).
+# Usage: netbox.manage <command> [args...]
+
+# shellcheck source=common.sh
+. "$(dirname "$0")/common.sh"
+
+run_manage "$@"

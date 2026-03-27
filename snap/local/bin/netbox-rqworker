@@ -1,0 +1,14 @@
+#!/bin/bash
+# Start the NetBox RQ background worker for the snap.
+
+# shellcheck source=common.sh
+. "$(dirname "$0")/common.sh"
+ensure_directories
+
+# Wait for backing services
+wait_for_postgres 60
+wait_for_redis 30
+
+echo "Starting NetBox RQ worker (queues: high, default, low)..."
+exec "$NETBOX_VENV/bin/python3" "$NETBOX_APP/manage.py" \
+    rqworker high default low

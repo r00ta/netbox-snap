@@ -1,0 +1,139 @@
+#!/bin/bash
+# Initialize NetBox: generate configuration (if missing), run migrations,
+# and collect static files.  This script is idempotent and runs on every
+# service start so that upgrades are applied automatically.
+
+# shellcheck source=common.sh
+. "$(dirname "$0")/common.sh"
+ensure_directories
+
+INIT_MARKER="$SNAP_COMMON/.initialized"
+
+# Ensure snap_settings.py exists (normally created by install hook, but
+# handle upgrades where a previous snap revision may not have created it).
+if [ ! -f "$NETBOX_CONFIG_DIR/snap_settings.py" ]; then
+    cat > "$NETBOX_CONFIG_DIR/snap_settings.py" <<'PYEOF'
+"""Snap-specific Django settings wrapper for NetBox."""
+import os
+from netbox.settings import *  # noqa: F401, F403
+
+STATIC_ROOT = os.environ.get('NETBOX_STATIC_ROOT', STATIC_ROOT)  # noqa: F405
+
+# WhiteNoise: serve static files directly from Gunicorn
+_wn = 'whitenoise.middleware.WhiteNoiseMiddleware'
+if _wn not in MIDDLEWARE:  # noqa: F405
+    for _i, _mw in enumerate(MIDDLEWARE):  # noqa: F405
+        if 'SecurityMiddleware' in _mw:
+            MIDDLEWARE.insert(_i + 1, _wn)  # noqa: F405
+            break
+    else:
+        MIDDLEWARE.insert(0, _wn)  # noqa: F405
+
+STORAGES = {  # noqa: F405
+    **STORAGES,  # noqa: F405
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
+PYEOF
+fi
+
+# Generate configuration.py if it does not exist.
+# The configure hook regenerates this file on every `snap set`, but we
+# need a valid file for the very first startup before configure runs.
+if [ ! -f "$NETBOX_CONFIG_FILE" ]; then
+    echo "Generating initial NetBox configuration..."
+
+    SECRET_KEY=$("$NETBOX_VENV/bin/python3" -c "
+import secrets, string
+chars = string.ascii_letters + string.digits + '!@#%^&*(-_=+)'
+print(''.join(secrets.choice(chars) for _ in range(50)))
+")
+
+    API_PEPPER=$("$NETBOX_VENV/bin/python3" -c "
+import secrets, string
+print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(60)))
+")
+
+    cat > "$NETBOX_CONFIG_FILE" <<PYEOF
+#
+# NetBox snap auto-generated configuration
+# Documentation: https://docs.netbox.dev/en/stable/configuration/
+#
+
+ALLOWED_HOSTS = ['*']
+
+DATABASE = {
+    'ENGINE': 'django.db.backends.postgresql',
+    'NAME': '${NETBOX_DB_NAME}',
+    'USER': '${NETBOX_DB_USER}',
+    'PASSWORD': '${NETBOX_DB_PASSWORD}',
+    'HOST': '${NETBOX_DB_HOST}',
+    'PORT': ${NETBOX_DB_PORT},
+    'CONN_MAX_AGE': 300,
+}
+
+REDIS = {
+    'tasks': {
+        'HOST': '${NETBOX_REDIS_HOST}',
+        'PORT': ${NETBOX_REDIS_PORT},
+        'USERNAME': '',
+        'PASSWORD': '${NETBOX_REDIS_PASSWORD}',
+        'DATABASE': 0,
+        'SSL': False,
+    },
+    'caching': {
+        'HOST': '${NETBOX_REDIS_HOST}',
+        'PORT': ${NETBOX_REDIS_PORT},
+        'USERNAME': '',
+        'PASSWORD': '${NETBOX_REDIS_PASSWORD}',
+        'DATABASE': 1,
+        'SSL': False,
+    },
+}
+
+SECRET_KEY = '${SECRET_KEY}'
+
+API_TOKEN_PEPPERS = {
+    1: '${API_PEPPER}',
+}
+
+MEDIA_ROOT = '${NETBOX_MEDIA_ROOT}'
+REPORTS_ROOT = '${NETBOX_REPORTS_ROOT}'
+SCRIPTS_ROOT = '${NETBOX_SCRIPTS_ROOT}'
+
+DEBUG = False
+LOGIN_REQUIRED = True
+
+PYEOF
+
+    echo "Configuration written to $NETBOX_CONFIG_FILE"
+fi
+
+# Apply database migrations
+echo "Applying database migrations..."
+run_manage_nofork migrate --no-input
+
+# Collect static files into the writable area
+echo "Collecting static files..."
+run_manage_nofork collectstatic --no-input
+
+# First-time initialisation tasks
+if [ ! -f "$INIT_MARKER" ]; then
+    echo "Building initial search index..."
+    run_manage_nofork reindex --lazy 2>/dev/null || true
+    touch "$INIT_MARKER"
+    echo ""
+    echo "==================================================================="
+    echo "  NetBox has been initialized successfully!"
+    echo ""
+    echo "  Create an admin user by running:"
+    echo "    sudo netbox.manage createsuperuser"
+    echo ""
+    echo "  Then access the web UI at:"
+    echo "    http://localhost:${NETBOX_HTTP_PORT}"
+    echo "==================================================================="
+    echo ""
+fi
+
+echo "NetBox initialization complete."
