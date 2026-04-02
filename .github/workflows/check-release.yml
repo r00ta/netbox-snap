@@ -1,0 +1,79 @@
+name: Check for new NetBox release
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # every day at 08:00 UTC
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get current version from snapcraft.yaml
+        id: current
+        run: |
+          version=$(grep '^version:' snap/snapcraft.yaml | head -1 | sed "s/version: *'\\(.*\\)'/\\1/")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Current version: $version"
+
+      - name: Get latest NetBox release
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api repos/netbox-community/netbox/releases/latest --jq '.tag_name' | sed 's/^v//')
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest version: $latest"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          if [ "${{ steps.current.outputs.version }}" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+            echo "Already up to date."
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+            echo "New version available: ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: Update snapcraft.yaml
+        if: steps.compare.outputs.up_to_date == 'false'
+        env:
+          NEW_VERSION: ${{ steps.latest.outputs.version }}
+          OLD_VERSION: ${{ steps.current.outputs.version }}
+        run: |
+          sed -i "s/^version: '${OLD_VERSION}'/version: '${NEW_VERSION}'/" snap/snapcraft.yaml
+          sed -i "s/source-tag: v${OLD_VERSION}/source-tag: v${NEW_VERSION}/" snap/snapcraft.yaml
+
+          # Verify the replacements succeeded
+          updated_version=$(grep -Po "^version:\s*'\K[^']+" snap/snapcraft.yaml)
+          updated_tag=$(grep -Po "source-tag:\s*v\K[^\s]+" snap/snapcraft.yaml)
+
+          if [ "$updated_version" != "$NEW_VERSION" ] || [ "$updated_tag" != "$NEW_VERSION" ]; then
+            echo "::error::snapcraft.yaml update failed — version='$updated_version', source-tag='v$updated_tag'"
+            exit 1
+          fi
+
+          echo "Updated snapcraft.yaml:"
+          grep -E "^version:|source-tag:" snap/snapcraft.yaml
+
+      - name: Create Pull Request
+        if: steps.compare.outputs.up_to_date == 'false'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          commit-message: "Update NetBox to v${{ steps.latest.outputs.version }}"
+          branch: "update/netbox-${{ steps.latest.outputs.version }}"
+          title: "Update NetBox to v${{ steps.latest.outputs.version }}"
+          body: |
+            Automated update of NetBox from v${{ steps.current.outputs.version }} to v${{ steps.latest.outputs.version }}.
+
+            Release notes: https://github.com/netbox-community/netbox/releases/tag/v${{ steps.latest.outputs.version }}
+          labels: automated
