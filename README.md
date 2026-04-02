@@ -13,10 +13,8 @@ NetBox needs a PostgreSQL database and a Redis server. Install them any
 way you like (system packages, Docker, managed service, etc.):
 
 ```bash
-# Example: system packages on Ubuntu/Debian
 sudo apt install postgresql redis-server
 
-# Create the database
 sudo -u postgres createuser --superuser netbox
 sudo -u postgres createdb -O netbox netbox
 ```
@@ -24,23 +22,18 @@ sudo -u postgres createdb -O netbox netbox
 ## Quick Start
 
 ```bash
-# Install the snap
 sudo snap install community-netbox
 
-# Point at your database and Redis (defaults: localhost, standard ports)
 sudo snap set community-netbox db.host=localhost db.port=5432 \
   db.name=netbox db.user=netbox db.password=""
 sudo snap set community-netbox redis.host=localhost redis.port=6379
 
-# Restart to apply
 sudo snap restart community-netbox
 
-# Create an admin user
 sudo community-netbox.manage createsuperuser
-
-# Open the web UI
-xdg-open http://localhost:8080
 ```
+
+Open [http://localhost:8080](http://localhost:8080) and enjoy!
 
 ## Configuration
 
@@ -70,12 +63,12 @@ All settings are exposed via `snap set` / `snap get`:
 |-------------|---------|------------------  |
 | `http.port` | `8080`  | NetBox listen port |
 
+Example: 
+
 ```bash
-# Example: change the web UI port
 sudo snap set community-netbox http.port=9090
 sudo snap restart community-netbox
 
-# View all current settings
 sudo snap get community-netbox
 ```
 
