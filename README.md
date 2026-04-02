@@ -25,18 +25,18 @@ sudo -u postgres createdb -O netbox netbox
 
 ```bash
 # Install the snap
-sudo snap install netbox
+sudo snap install community-netbox
 
 # Point at your database and Redis (defaults: localhost, standard ports)
-sudo snap set netbox db.host=localhost db.port=5432 \
+sudo snap set community-netbox db.host=localhost db.port=5432 \
   db.name=netbox db.user=netbox db.password=""
-sudo snap set netbox redis.host=localhost redis.port=6379
+sudo snap set community-netbox redis.host=localhost redis.port=6379
 
 # Restart to apply
-sudo snap restart netbox
+sudo snap restart community-netbox
 
 # Create an admin user
-sudo netbox.manage createsuperuser
+sudo community-netbox.manage createsuperuser
 
 # Open the web UI
 xdg-open http://localhost:8080
@@ -72,11 +72,11 @@ All settings are exposed via `snap set` / `snap get`:
 
 ```bash
 # Example: change the web UI port
-sudo snap set netbox http.port=9090
-sudo snap restart netbox
+sudo snap set community-netbox http.port=9090
+sudo snap restart community-netbox
 
 # View all current settings
-sudo snap get netbox
+sudo snap get community-netbox
 ```
 
 ### Advanced Settings
@@ -84,7 +84,7 @@ sudo snap get netbox
 The full NetBox configuration file is at:
 
 ```
-/var/snap/netbox/common/config/configuration.py
+/var/snap/community-netbox/common/config/configuration.py
 ```
 
 Edit it to change `ALLOWED_HOSTS`, authentication backends, email, plugins,
@@ -100,8 +100,8 @@ The snap runs two daemon services:
 
 | Service                  | Description                       |
 |--------------------------|-----------------------------------|
-| `netbox.netbox-web`      | Gunicorn WSGI server (NetBox UI)  |
-| `netbox.netbox-rqworker` | Background task worker (RQ)       |
+| `community-netbox.netbox-web`      | Gunicorn WSGI server (NetBox UI)  |
+| `community-netbox.netbox-rqworker` | Background task worker (RQ)       |
 
 Both start automatically after installation. On each start the web service
 runs database migrations and collects static files so upgrades are seamless.
@@ -109,30 +109,30 @@ runs database migrations and collects static files so upgrades are seamless.
 ## Management Commands
 
 ```bash
-sudo netbox.manage createsuperuser       # Create admin user
-sudo netbox.manage migrate               # Run migrations manually
-sudo netbox.manage nbshell               # Interactive NetBox shell
-sudo netbox.manage dumpdata --format json # Export data
-sudo netbox.manage loaddata fixture.json  # Import data
+sudo community-netbox.manage createsuperuser       # Create admin user
+sudo community-netbox.manage migrate               # Run migrations manually
+sudo community-netbox.manage nbshell               # Interactive NetBox shell
+sudo community-netbox.manage dumpdata --format json # Export data
+sudo community-netbox.manage loaddata fixture.json  # Import data
 ```
 
 ## Data Locations
 
 | Path | Contents |
 |------|----------|
-| `/var/snap/netbox/common/config/`  | Configuration files |
-| `/var/snap/netbox/common/media/`   | Uploaded files |
-| `/var/snap/netbox/common/reports/` | Custom reports |
-| `/var/snap/netbox/common/scripts/` | Custom scripts |
-| `/var/snap/netbox/common/static/`  | Collected static files |
+| `/var/snap/community-netbox/common/config/`  | Configuration files |
+| `/var/snap/community-netbox/common/media/`   | Uploaded files |
+| `/var/snap/community-netbox/common/reports/` | Custom reports |
+| `/var/snap/community-netbox/common/scripts/` | Custom scripts |
+| `/var/snap/community-netbox/common/static/`  | Collected static files |
 
 ## Service Management
 
 ```bash
-sudo snap services netbox                     # Status
-sudo snap restart netbox                      # Restart all
-sudo snap logs netbox.netbox-web              # View logs
-sudo snap stop netbox.netbox-rqworker         # Stop worker
+sudo snap services community-netbox                     # Status
+sudo snap restart community-netbox                      # Restart all
+sudo snap logs community-netbox.netbox-web              # View logs
+sudo snap stop community-netbox.netbox-rqworker         # Stop worker
 ```
 
 ## Building from Source
@@ -141,7 +141,7 @@ sudo snap stop netbox.netbox-rqworker         # Stop worker
 sudo snap install snapcraft --classic
 cd community-netbox/
 snapcraft
-sudo snap install netbox_*.snap --dangerous
+sudo snap install community-netbox_*.snap --dangerous
 ```
 
 ## License
