@@ -1,5 +1,7 @@
 # NetBox Snap Package
 
+[![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/community-netbox)
+
 A self-contained [snap](https://snapcraft.io/) package for
 [NetBox](https://github.com/netbox-community/netbox).
 
